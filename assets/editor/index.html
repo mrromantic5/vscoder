@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0" />
+  <meta name="theme-color" content="#0D1117" />
+  <title>VScoder Editor</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      background: #0D1117;
+      height: 100%;
+      width: 100%;
+      overflow: hidden;
+    }
+
+    #editor-wrap {
+      height: 100vh;
+      width: 100vw;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    #editor {
+      flex: 1;
+      overflow: hidden;
+      height: 100%;
+    }
+
+    /* Override CM6 scroller to fill container */
+    .cm-editor {
+      height: 100%;
+      outline: none !important;
+    }
+
+    .cm-editor .cm-scroller {
+      height: 100%;
+      overflow: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    /* Scrollbar styling */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #0D1117; }
+    ::-webkit-scrollbar-thumb {
+      background: #30363D;
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover { background: #484F58; }
+
+    /* Loading state */
+    #loading {
+      position: fixed;
+      inset: 0;
+      background: #0D1117;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+      transition: opacity 0.3s;
+    }
+
+    #loading.hidden { opacity: 0; pointer-events: none; }
+
+    .loader-dot {
+      width: 8px; height: 8px;
+      background: #58A6FF;
+      border-radius: 50%;
+      margin: 0 4px;
+      animation: bounce 0.8s infinite alternate;
+    }
+    .loader-dot:nth-child(2) { animation-delay: 0.2s; }
+    .loader-dot:nth-child(3) { animation-delay: 0.4s; }
+
+    @keyframes bounce {
+      to { transform: translateY(-12px); opacity: 0.4; }
+    }
+
+    /* Mobile-specific: prevent text selection from conflicting with editor */
+    #editor { -webkit-user-select: text; user-select: text; }
+  </style>
+</head>
+<body>
+  <div id="loading">
+    <div class="loader-dot"></div>
+    <div class="loader-dot"></div>
+    <div class="loader-dot"></div>
+  </div>
+
+  <div id="editor-wrap">
+    <div id="editor"></div>
+  </div>
+
+  <!-- CodeMirror 6 bundle (built by npm run build in GitHub Actions) -->
+  <script src="editor.bundle.js"></script>
+
+  <script>
+    // Hide loader once editor is ready
+    window.flutter_inappwebview?.callHandler && (function waitForEditor() {
+      if (window.vsEditor && window.vsEditor.isReady()) {
+        document.getElementById('loading').classList.add('hidden');
+      } else {
+        setTimeout(waitForEditor, 50);
+      }
+    })();
+
+    // Fallback hide
+    setTimeout(() => {
+      document.getElementById('loading').classList.add('hidden');
+    }, 2000);
+
+    // Prevent default context menu on mobile (handled by Flutter)
+    document.addEventListener('contextmenu', e => e.preventDefault());
+
+    // Handle Android back key in editor
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape') {
+        window.flutter_inappwebview?.callHandler('onEscapeKey');
+      }
+    });
+  </script>
+</body>
+</html>
