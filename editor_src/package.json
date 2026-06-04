@@ -1,0 +1,37 @@
+{
+  "name": "vscoder-editor-bundle",
+  "version": "1.0.0",
+  "description": "CodeMirror 6 bundle for VScoder mobile IDE",
+  "private": true,
+  "scripts": {
+    "build": "esbuild src/main.js --bundle --outfile=../assets/editor/editor.bundle.js --platform=browser --target=es2020 --minify --legal-comments=none",
+    "build:dev": "esbuild src/main.js --bundle --outfile=../assets/editor/editor.bundle.js --platform=browser --target=es2020 --sourcemap",
+    "watch": "esbuild src/main.js --bundle --outfile=../assets/editor/editor.bundle.js --platform=browser --target=es2020 --watch"
+  },
+  "dependencies": {
+    "@codemirror/autocomplete": "^6.18.0",
+    "@codemirror/commands": "^6.7.1",
+    "@codemirror/lang-cpp": "^6.0.2",
+    "@codemirror/lang-css": "^6.3.1",
+    "@codemirror/lang-go": "^6.0.2",
+    "@codemirror/lang-html": "^6.4.9",
+    "@codemirror/lang-java": "^6.0.1",
+    "@codemirror/lang-javascript": "^6.2.2",
+    "@codemirror/lang-json": "^6.0.1",
+    "@codemirror/lang-markdown": "^6.3.1",
+    "@codemirror/lang-php": "^6.0.1",
+    "@codemirror/lang-python": "^6.1.6",
+    "@codemirror/lang-rust": "^6.0.1",
+    "@codemirror/lang-sql": "^6.8.0",
+    "@codemirror/lang-xml": "^6.1.0",
+    "@codemirror/lang-yaml": "^6.1.2",
+    "@codemirror/language": "^6.10.3",
+    "@codemirror/legacy-modes": "^6.4.2",
+    "@codemirror/lint": "^6.8.2",
+    "@codemirror/search": "^6.5.8",
+    "@codemirror/state": "^6.4.1",
+    "@codemirror/view": "^6.35.0",
+    "@lezer/highlight": "^1.2.1",
+    "esbuild": "^0.24.2"
+  }
+}
