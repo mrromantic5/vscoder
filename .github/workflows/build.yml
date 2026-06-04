@@ -7,10 +7,18 @@ on:
     branches: [main, master]
   workflow_dispatch:
 
+# FIX 1: Grant contents:write so the GitHub token can create releases
+permissions:
+  contents: write
+
 jobs:
   build:
     name: Build Flutter APK & AAB
     runs-on: ubuntu-latest
+
+    # FIX 2: Opt into Node.js 24 now to avoid forced breakage on June 16 2026
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
     steps:
       # ── 1. Checkout ─────────────────────────────────────────────
@@ -35,7 +43,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Install editor dependencies
         working-directory: editor_src
