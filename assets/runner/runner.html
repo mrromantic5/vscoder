@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VScoder Runner</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #fff;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      min-height: 100vh;
+    }
+    /* Error overlay */
+    #vs-error {
+      display: none;
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      background: #1a0505;
+      border-top: 2px solid #F85149;
+      color: #F85149;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      padding: 10px 14px;
+      max-height: 40vh;
+      overflow-y: auto;
+      z-index: 99999;
+    }
+    #vs-error.visible { display: block; }
+    #vs-error-title {
+      color: #FF7B72;
+      font-weight: bold;
+      margin-bottom: 4px;
+      font-size: 13px;
+    }
+    #vs-close-err {
+      position: absolute;
+      top: 8px; right: 10px;
+      background: none; border: none;
+      color: #8B949E; cursor: pointer;
+      font-size: 16px;
+    }
+  </style>
+</head>
+<body>
+  <!-- User code is injected here -->
+  <div id="vs-user-root"></div>
+
+  <!-- Error overlay -->
+  <div id="vs-error">
+    <div id="vs-error-title">⚠ Runtime Error</div>
+    <pre id="vs-error-msg"></pre>
+    <button id="vs-close-err" onclick="document.getElementById('vs-error').classList.remove('visible')">✕</button>
+  </div>
+
+  <script>
+    // ── Console bridge to Flutter ─────────────────────────────────────
+    function sendToFlutter(type, msg) {
+      try {
+        window.flutter_inappwebview?.callHandler('onRunnerLog', type, msg);
+      } catch(e) {}
+    }
+
+    const _log   = console.log.bind(console);
+    const _warn  = console.warn.bind(console);
+    const _error = console.error.bind(console);
+    const _info  = console.info.bind(console);
+
+    console.log   = (...a) => { _log(...a);   sendToFlutter('log',   a.map(formatArg).join(' ')); };
+    console.warn  = (...a) => { _warn(...a);  sendToFlutter('warn',  a.map(formatArg).join(' ')); };
+    console.error = (...a) => { _error(...a); sendToFlutter('error', a.map(formatArg).join(' ')); };
+    console.info  = (...a) => { _info(...a);  sendToFlutter('info',  a.map(formatArg).join(' ')); };
+
+    function formatArg(a) {
+      if (typeof a === 'object') {
+        try { return JSON.stringify(a, null, 2); } catch(e) { return String(a); }
+      }
+      return String(a);
+    }
+
+    window.onerror = function(msg, src, line, col, err) {
+      const fullMsg = `${msg}\n  at ${src || 'unknown'}:${line}:${col}`;
+      sendToFlutter('error', fullMsg);
+      document.getElementById('vs-error-msg').textContent = fullMsg;
+      document.getElementById('vs-error').classList.add('visible');
+      return false;
+    };
+
+    window.onunhandledrejection = function(e) {
+      const msg = `Unhandled Promise rejection: ${e.reason}`;
+      sendToFlutter('error', msg);
+    };
+
+    // ── Run user code ──────────────────────────────────────────────────
+    // Called from Flutter: window.vsRunner.run(html, css, js)
+    window.vsRunner = {
+      run(htmlContent, cssContent, jsContent) {
+        try {
+          document.getElementById('vs-error').classList.remove('visible');
+
+          // Inject CSS
+          let styleEl = document.getElementById('vs-user-style');
+          if (!styleEl) {
+            styleEl = document.createElement('style');
+            styleEl.id = 'vs-user-style';
+            document.head.appendChild(styleEl);
+          }
+          styleEl.textContent = cssContent || '';
+
+          // Inject HTML
+          document.getElementById('vs-user-root').innerHTML = htmlContent || '';
+
+          // Execute JS
+          if (jsContent && jsContent.trim()) {
+            const scriptEl = document.createElement('script');
+            scriptEl.id = 'vs-user-script';
+            scriptEl.textContent = jsContent;
+            const old = document.getElementById('vs-user-script');
+            if (old) old.remove();
+            document.body.appendChild(scriptEl);
+          }
+
+          sendToFlutter('info', '✓ Code executed successfully');
+        } catch (err) {
+          sendToFlutter('error', `Execution error: ${err.message}`);
+        }
+      },
+
+      // Run a full HTML document (from file)
+      runHtml(fullHtml) {
+        try {
+          document.open();
+          document.write(fullHtml);
+          document.close();
+          sendToFlutter('info', '✓ HTML loaded');
+        } catch(err) {
+          sendToFlutter('error', err.message);
+        }
+      },
+
+      clear() {
+        document.getElementById('vs-user-root').innerHTML = '';
+        document.getElementById('vs-error').classList.remove('visible');
+      }
+    };
+
+    sendToFlutter('info', '▶ Runner ready');
+  </script>
+</body>
+</html>
