@@ -13,45 +13,56 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # ─── 1. Checkout ───────────────────────────────────────────────
+      # ── 1. Checkout ─────────────────────────────────────────────
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # ─── 2. Node.js + CodeMirror 6 Bundle ─────────────────────────
+      # ── 2. Check if signing secrets are available ────────────────
+      - name: Check signing secrets
+        id: secrets
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "has_keystore=true" >> $GITHUB_OUTPUT
+            echo "✅ Keystore secret found — building SIGNED release"
+          else
+            echo "has_keystore=false" >> $GITHUB_OUTPUT
+            echo "⚠️  No keystore secret — building DEBUG (unsigned)"
+          fi
+        env:
+          KEYSTORE_B64: ${{ secrets.KEYSTORE_BASE64 }}
+
+      # ── 3. Node.js + CodeMirror 6 Bundle ────────────────────────
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: editor_src/package-lock.json
 
       - name: Install editor dependencies
         working-directory: editor_src
-        run: npm ci
+        run: npm install
 
       - name: Build CodeMirror 6 bundle
         working-directory: editor_src
         run: npm run build
 
-      # ─── 3. Download JetBrains Mono font ──────────────────────────
+      # ── 4. Download JetBrains Mono fonts ────────────────────────
       - name: Download JetBrains Mono fonts
         run: |
           mkdir -p assets/fonts
-          curl -L "https://github.com/JetBrains/JetBrainsMono/raw/master/fonts/ttf/JetBrainsMono-Regular.ttf" \
-            -o assets/fonts/JetBrainsMono-Regular.ttf
-          curl -L "https://github.com/JetBrains/JetBrainsMono/raw/master/fonts/ttf/JetBrainsMono-Bold.ttf" \
-            -o assets/fonts/JetBrainsMono-Bold.ttf
-          curl -L "https://github.com/JetBrains/JetBrainsMono/raw/master/fonts/ttf/JetBrainsMono-Italic.ttf" \
-            -o assets/fonts/JetBrainsMono-Italic.ttf
+          BASE="https://github.com/JetBrains/JetBrainsMono/raw/master/fonts/ttf"
+          curl -sL "$BASE/JetBrainsMono-Regular.ttf" -o assets/fonts/JetBrainsMono-Regular.ttf
+          curl -sL "$BASE/JetBrainsMono-Bold.ttf"    -o assets/fonts/JetBrainsMono-Bold.ttf
+          curl -sL "$BASE/JetBrainsMono-Italic.ttf"  -o assets/fonts/JetBrainsMono-Italic.ttf
+          echo "✅ Fonts downloaded"
 
-      # ─── 4. Java ───────────────────────────────────────────────────
+      # ── 5. Java ──────────────────────────────────────────────────
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
           java-version: '17'
 
-      # ─── 5. Flutter ────────────────────────────────────────────────
+      # ── 6. Flutter ───────────────────────────────────────────────
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
@@ -66,78 +77,78 @@ jobs:
         run: flutter analyze --no-fatal-infos
         continue-on-error: true
 
-      # ─── 6. Keystore Setup (for signed build) ─────────────────────
-      - name: Decode keystore
-        if: ${{ secrets.KEYSTORE_BASE64 != '' }}
+      # ── 7. Setup keystore for SIGNED build ──────────────────────
+      - name: Setup keystore
+        if: steps.secrets.outputs.has_keystore == 'true'
         run: |
-          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > android/app/vscoder-release.jks
-
-      - name: Create key.properties
-        if: ${{ secrets.KEYSTORE_BASE64 != '' }}
-        run: |
+          echo "$KEYSTORE_B64" | base64 --decode > android/app/vscoder-release.jks
           cat > android/key.properties << EOF
-          storePassword=${{ secrets.STORE_PASSWORD }}
-          keyPassword=${{ secrets.KEY_PASSWORD }}
-          keyAlias=${{ secrets.KEY_ALIAS }}
+          storePassword=$STORE_PASS
+          keyPassword=$KEY_PASS
+          keyAlias=$KEY_ALIAS
           storeFile=vscoder-release.jks
           EOF
+          echo "✅ Keystore configured"
+        env:
+          KEYSTORE_B64: ${{ secrets.KEYSTORE_BASE64 }}
+          STORE_PASS:   ${{ secrets.STORE_PASSWORD }}
+          KEY_PASS:     ${{ secrets.KEY_PASSWORD }}
+          KEY_ALIAS:    ${{ secrets.KEY_ALIAS }}
 
-      # ─── 7. Build APK ──────────────────────────────────────────────
-      - name: Build APK (debug — no keystore needed)
-        if: ${{ secrets.KEYSTORE_BASE64 == '' }}
-        run: flutter build apk --debug --split-per-abi
-
-      - name: Build APK (release — signed)
-        if: ${{ secrets.KEYSTORE_BASE64 != '' }}
+      # ── 8. Build APK ─────────────────────────────────────────────
+      - name: Build APK (signed release)
+        if: steps.secrets.outputs.has_keystore == 'true'
         run: flutter build apk --release --split-per-abi
 
-      # ─── 8. Build AAB ──────────────────────────────────────────────
-      - name: Build AAB (debug)
-        if: ${{ secrets.KEYSTORE_BASE64 == '' }}
-        run: flutter build appbundle --debug
+      - name: Build APK (debug — no keystore)
+        if: steps.secrets.outputs.has_keystore == 'false'
+        run: flutter build apk --debug --split-per-abi
 
-      - name: Build AAB (release — signed)
-        if: ${{ secrets.KEYSTORE_BASE64 != '' }}
+      # ── 9. Build AAB ─────────────────────────────────────────────
+      - name: Build AAB (signed release)
+        if: steps.secrets.outputs.has_keystore == 'true'
         run: flutter build appbundle --release
 
-      # ─── 9. Upload Artifacts ───────────────────────────────────────
+      - name: Build AAB (debug — no keystore)
+        if: steps.secrets.outputs.has_keystore == 'false'
+        run: flutter build appbundle --debug
+
+      # ── 10. Upload build artifacts ───────────────────────────────
       - name: Upload APKs
         uses: actions/upload-artifact@v4
         with:
           name: VScoder-APKs
-          path: |
-            build/app/outputs/flutter-apk/*.apk
+          path: build/app/outputs/flutter-apk/*.apk
           retention-days: 30
 
       - name: Upload AAB
         uses: actions/upload-artifact@v4
         with:
           name: VScoder-AAB
-          path: |
-            build/app/outputs/bundle/**/*.aab
+          path: build/app/outputs/bundle/**/*.aab
           retention-days: 30
 
-      # ─── 10. Create GitHub Release (on push to main) ──────────────
-      - name: Create Release
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      # ── 11. Create GitHub Release ────────────────────────────────
+      - name: Create GitHub Release
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ github.run_number }}
           name: VScoder v${{ github.run_number }}
           body: |
             ## VScoder Build #${{ github.run_number }}
-            
+
             **Commit:** ${{ github.sha }}
-            
-            ### Downloads
-            - `app-arm64-v8a-release.apk` → Modern Android (64-bit) ✅ Recommended
-            - `app-armeabi-v7a-release.apk` → Older Android (32-bit)
-            - `app-release.aab` → Google Play Store upload
-            
-            ### Install APK
-            1. Download the APK for your device architecture
-            2. Enable "Install from unknown sources" in Android settings
-            3. Install and enjoy VScoder!
+            **Signed:** ${{ steps.secrets.outputs.has_keystore == 'true' && 'Yes ✅' || 'No (debug) ⚠️' }}
+
+            ### Install APK directly
+            1. Download `app-arm64-v8a-*.apk` (recommended for modern phones)
+            2. Or `app-armeabi-v7a-*.apk` for older phones
+            3. Enable **Install from unknown sources** in Android settings
+            4. Install and enjoy VScoder!
+
+            ### Play Store
+            Upload `app-release.aab` to Google Play Console.
           files: |
             build/app/outputs/flutter-apk/*.apk
             build/app/outputs/bundle/**/*.aab
