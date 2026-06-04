@@ -23,7 +23,7 @@ dependencies:
   permission_handler: ^11.3.1
 
   # Local HTTP server for running web projects
-  shelf: ^1.4.2
+  shelf: ^1.4.1
   shelf_static: ^1.1.2
 
   # State management
